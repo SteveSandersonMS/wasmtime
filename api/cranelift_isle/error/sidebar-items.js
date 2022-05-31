@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["Error","Errors produced by ISLE."]],"struct":[["Source","A source file and its contents."],["Span","A span in a given source."]],"type":[["Result","Either `Ok(T)` or `Err(isle::Error)`."]]});

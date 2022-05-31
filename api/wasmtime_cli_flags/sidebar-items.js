@@ -1,0 +1,1 @@
+initSidebarItems({"constant":[["SUPPORTED_WASI_MODULES",""],["SUPPORTED_WASM_FEATURES",""]],"struct":[["CommonOptions","Common options for commands that translate WebAssembly modules"],["WasiModules","Select which WASI modules are available at runtime for use by Wasm programs."],["WasmFeatures",""]]});
