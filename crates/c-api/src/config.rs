@@ -2,6 +2,8 @@
 // them with the default set of features enabled.
 #![cfg_attr(not(feature = "cache"), allow(unused_imports))]
 
+use wasmtime::LinearMemory;
+use wasmtime::MemoryCreator;
 use crate::{handle_result, wasmtime_error_t};
 use std::ffi::CStr;
 use std::os::raw::c_char;
@@ -183,4 +185,63 @@ pub extern "C" fn wasmtime_config_static_memory_guard_size_set(c: &mut wasm_conf
 #[no_mangle]
 pub extern "C" fn wasmtime_config_dynamic_memory_guard_size_set(c: &mut wasm_config_t, size: u64) {
     c.config.dynamic_memory_guard_size(size);
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_config_with_host_memory(
+    c: &mut wasm_config_t,
+    create: extern fn() -> u64,
+    destroy: extern fn(u64) -> (),
+    byte_size: extern fn(u64) -> usize,
+    as_ptr: extern fn(u64) -> *mut u8) {
+    let mem_creator = std::sync::Arc::new(CallbackMemoryCreator { create, destroy, byte_size, as_ptr });
+    c.config.with_host_memory(mem_creator.clone());
+}
+
+struct CallbackMemoryCreator {
+    create: extern fn() -> u64,
+    destroy: extern fn(u64) -> (),
+    byte_size: extern fn(u64) -> usize,
+    as_ptr: extern fn(u64) -> *mut u8,
+}
+
+unsafe impl MemoryCreator for CallbackMemoryCreator {
+    fn new_memory(&self, _: wasmtime::MemoryType, _: usize, _: std::option::Option<usize>, _: std::option::Option<usize>, _: usize) -> std::result::Result<std::boxed::Box<(dyn wasmtime::LinearMemory + 'static)>, std::string::String> {
+        let memory_id = (self.create)();
+        Ok(Box::new(CallbackLinearMemory { memory_id, byte_size: self.byte_size, as_ptr: self.as_ptr, destroy: self.destroy }))
+    }
+}
+
+struct CallbackLinearMemory {
+    memory_id: u64,
+    byte_size: extern fn(u64) -> usize,
+    as_ptr: extern fn(u64) -> *mut u8,
+    destroy: extern fn(u64) -> (),
+}
+
+impl Drop for CallbackLinearMemory {
+    fn drop(&mut self) {
+        (self.destroy)(self.memory_id);
+    }
+}
+
+unsafe impl LinearMemory for CallbackLinearMemory {
+    fn byte_size(&self) -> usize {
+        (self.byte_size)(self.memory_id)
+    }
+
+    fn maximum_byte_size(&self) -> Option<usize> {
+        /* Not supporting grow */
+        Some(self.byte_size())
+    }
+
+    fn grow_to(&mut self, _new_size: usize) -> std::result::Result<(), wasmtime_wasi::Error> {
+        /* Not supporting grow */
+        todo!();
+    }
+
+    fn as_ptr(&self) -> *mut u8 {
+        //println!("In CallbackLinearMemory::as_ptr");
+        (self.as_ptr)(self.memory_id)
+    }
 }
